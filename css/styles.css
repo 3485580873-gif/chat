@@ -11652,3 +11652,60 @@ body #user-sticker-picker .empty-sticker-tip {
 .message-sticker {
     display: block;
 }
+
+/* ============================================================
+   顶栏 / 底部输入栏：改为完全透明（不用毛玻璃 backdrop-filter）
+   实测切后台再切回来，顶栏和输入框不再闪黑
+   ============================================================ */
+.header,
+.input-area-wrapper {
+   background: transparent !important;
+   backdrop-filter: none !important;
+   -webkit-backdrop-filter: none !important;
+}
+
+.header {
+   border-bottom-color: transparent !important;
+   box-shadow: none !important;
+}
+
+.input-area {
+   border-top-color: transparent !important;
+}
+
+/* 透明背景下文字加阴影，保证在各种聊天背景上都清晰可读 */
+.header .username,
+.header .status,
+.header-motto,
+.header-actions .action-btn {
+   text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+html[data-theme="light"] .header .username,
+html[data-theme="light"] .header .status,
+html[data-theme="light"] .header-motto {
+   text-shadow: 0 1px 3px rgba(255,255,255,0.5);
+}
+html[data-theme="dark"] .header .username,
+html[data-theme="dark"] .header .status,
+html[data-theme="dark"] .header-motto {
+   text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+.header .action-btn,
+.header .action-btn i {
+   color: rgba(255, 255, 255, 0.85) !important;
+}
+.header .action-btn:hover {
+   color: #ffffff !important;
+   background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* ============================================================
+   全局去除毛玻璃模糊效果（backdrop-filter）
+   只去掉"模糊"这一个特效，各元素原本的颜色/透明度不受影响
+   —— 这是切后台再切回来会闪黑的根源，弹窗类元素（信封/问卷/红包等）
+   保留原本的半透明背景，只是不再模糊，视觉上依然能分清前后层次
+   ============================================================ */
+* {
+   backdrop-filter: none !important;
+   -webkit-backdrop-filter: none !important;
+}
