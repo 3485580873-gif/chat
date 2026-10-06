@@ -1660,6 +1660,19 @@ html[data-theme="dark"] #cs-transition-overlay{background:radial-gradient(circle
                 <div style="font-size: 10px; color: var(--text-secondary); margin-top: 4px; opacity: 0.7;">
                     提示: 应用后将覆盖默认字体。留空并应用可恢复默认。
                 </div>
+                <div style="margin-top:12px;">
+                    <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:5px;">本地字体文件上传:</label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button id="upload-font-btn" class="modal-btn modal-btn-primary" style="padding:7px 14px;font-size:12px;white-space:nowrap;display:flex;align-items:center;gap:5px;" title="上传本地字体文件">
+                            <i class="fas fa-upload"></i> 选择字体文件
+                        </button>
+                        <span id="local-font-name" style="font-size:12px;color:var(--accent-color);flex:1;word-break:break-all;"></span>
+                    </div>
+                    <input type="file" id="local-font-input" accept=".ttf,.otf,.woff,.woff2" style="display:none;">
+                    <div style="font-size:10px;color:var(--text-secondary);margin-top:4px;opacity:0.7;">
+                        支持 TTF / OTF / WOFF / WOFF2，仅本机使用，不会上传到服务器。
+                    </div>
+                </div>
             </div>
         </div>
         <div class="settings-section">

@@ -491,7 +491,7 @@ const loadData = async () => {
         }
         document.body.classList.toggle('show-partner-name', showPartnerNameInChat);
         try {
-            if (settings.customFontUrl) applyCustomFont(settings.customFontUrl);
+            if (settings.customFontUrl && settings.customFontUrl !== '__local__') applyCustomFont(settings.customFontUrl);
             if (settings.customBubbleCss) applyCustomBubbleCss(settings.customBubbleCss);
             if (settings.customGlobalCss) applyGlobalThemeCss(settings.customGlobalCss);
         } catch(e) { console.warn("样式应用失败", e); }
@@ -1353,6 +1353,7 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
         messageDiv.className = `message message-${msg.sender === 'user' ? 'sent' : 'received'} ${settings.bubbleStyle}`;
     }
     messageDiv.innerHTML = messageHTML;
+
     // 阶段三B：innerHTML 塞完后，找带 data-lazy-cloud-ref 的图绑定懒加载
     if (window.CloudMedia) {
         messageDiv.querySelectorAll('img[data-lazy-cloud-ref]').forEach(function (imgEl) {
@@ -2788,7 +2789,7 @@ function showModal(modalElement, focusElement = null) {
                             if (importedData.settings) {
                                 Object.assign(settings, importedData.settings);
                                 try {
-                                    if (settings.customFontUrl) applyCustomFont(settings.customFontUrl);
+                                    if (settings.customFontUrl && settings.customFontUrl !== '__local__') applyCustomFont(settings.customFontUrl);
                                     if (settings.customBubbleCss) applyCustomBubbleCss(settings.customBubbleCss);
                                     if (settings.customGlobalCss) applyGlobalThemeCss(settings.customGlobalCss);
                                 } catch(e2) { console.warn('导入后样式应用失败', e2); }

@@ -52,6 +52,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateLoader('正在读取记忆存档...', '40%');
         await safeAwait(loadData());
 
+        // 恢复上次上传的本地字体（如有）
+        if (typeof window._restoreLocalFontIfNeeded === 'function') {
+            await safeAwait(window._restoreLocalFontIfNeeded());
+        }
+
         updateLoader('正在渲染我们的世界...', '70%');
         
         await Promise.allSettled([

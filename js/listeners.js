@@ -435,22 +435,27 @@ if (target.classList.contains('delete-btn')) {
 fileInput.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (file) {
-        if (file.size > MAX_AVATAR_SIZE) {
-            showNotification('头像图片不能超过2MB', 'error');
-            return;
-        }
+        const processAvatarFile = (srcFile) => {
+            showNotification('正在裁剪处理...', 'info', 1000);
+            cropImageToSquare(srcFile, 300).then(base64Data => {
+                currentAvatarData = base64Data;
+                previewImg.src = currentAvatarData;
+                previewDiv.style.display = 'block';
+                saveBtn.disabled = false;
+            }).catch(err => {
+                console.error(err);
+                showNotification('图片处理失败', 'error');
+            });
+        };
 
-        showNotification('正在裁剪处理...', 'info', 1000);
-        
-        cropImageToSquare(file, 300).then(base64Data => {
-            currentAvatarData = base64Data;
-            previewImg.src = currentAvatarData;
-            previewDiv.style.display = 'block';
-            saveBtn.disabled = false;
-        }).catch(err => {
-            console.error(err);
-            showNotification('图片处理失败', 'error');
-        });
+        if (file.size > MAX_AVATAR_SIZE) {
+            showNotification('头像图片超过2MB，正在自动压缩...', 'info', 1800);
+            compressImageUnderMaxBytes(file, MAX_AVATAR_SIZE, { maxWidth: 1200, quality: 0.85 })
+                .then(processAvatarFile)
+                .catch(() => processAvatarFile(file));
+        } else {
+            processAvatarFile(file);
+        }
     }
 });
 
@@ -744,7 +749,7 @@ if (_chatSettingsEl) _chatSettingsEl.addEventListener('click', () => {
             const fontUrlInput = document.getElementById('custom-font-url');
             const applyFontBtn = document.getElementById('apply-font-btn');
             
-            if (fontUrlInput) fontUrlInput.value = settings.customFontUrl || "";
+            if (fontUrlInput) fontUrlInput.value = (settings.customFontUrl === '__local__') ? '' : (settings.customFontUrl || "");
 
             if (applyFontBtn) {
                 applyFontBtn.addEventListener('click', () => {
@@ -764,32 +769,115 @@ if (_chatSettingsEl) _chatSettingsEl.addEventListener('click', () => {
             const followSystemBtn = document.getElementById('follow-system-font-btn');
             if (followSystemBtn) {
                 followSystemBtn.addEventListener('click', () => {
-                    
+
                     const systemFontStack = 'system-ui, -apple-system, sans-serif';
-                    
-                    
+
+
                     if (fontUrlInput) fontUrlInput.value = "";
-                    
-                    
+
+
                     settings.customFontUrl = "";
-                    
-                    
+                    settings.localFontName = "";
+
+                    // 清除本地字体缓存
+                    try { if (window.localforage) localforage.removeItem(getStorageKey('localFontFile')); } catch(e) {}
+                    const _lfn = document.getElementById('local-font-name');
+                    if (_lfn) _lfn.textContent = '';
+
                     settings.messageFontFamily = systemFontStack;
-                    
-                    
+
+
                     document.documentElement.style.setProperty('--font-family', systemFontStack);
                     document.documentElement.style.setProperty('--message-font-family', systemFontStack);
-                    
-                    
+
+
                     throttledSaveData();
-                    
-                    
+
+
                     renderMessages(true);
-                    
+
                     showNotification('已应用跟随系统字体', 'success');
                 });
             }
-            
+
+            // 本地上传字体文件
+            const uploadFontBtn = document.getElementById('upload-font-btn');
+            const localFontInput = document.getElementById('local-font-input');
+            const localFontName = document.getElementById('local-font-name');
+
+            if (uploadFontBtn && localFontInput) {
+                uploadFontBtn.addEventListener('click', () => {
+                    localFontInput.click();
+                });
+
+                localFontInput.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    const validExts = ['.ttf', '.otf', '.woff', '.woff2'];
+                    const ext = '.' + file.name.split('.').pop().toLowerCase();
+                    if (!validExts.includes(ext)) {
+                        showNotification('请选择 TTF/OTF/WOFF/WOFF2 格式的字体文件', 'error');
+                        return;
+                    }
+
+                    showNotification('正在加载本地字体...', 'info', 1500);
+
+                    try {
+                        const arrayBuffer = await file.arrayBuffer();
+                        const base64 = arrayBufferToBase64(arrayBuffer);
+
+                        await localforage.setItem(getStorageKey('localFontFile'), {
+                            name: file.name,
+                            data: base64,
+                            mime: file.type || 'font/' + ext.slice(1)
+                        });
+
+                        settings.customFontUrl = '__local__';
+                        settings.localFontName = file.name;
+
+                        const blob = new Blob([arrayBuffer], { type: file.type || 'font/' + ext.slice(1) });
+                        const blobUrl = URL.createObjectURL(blob);
+
+                        await applyCustomFont(blobUrl);
+
+                        if (fontUrlInput) fontUrlInput.value = '';
+                        if (localFontName) {
+                            localFontName.textContent = '✅ 已加载: ' + file.name;
+                        }
+
+                        try {
+                            const p = throttledSaveData();
+                            if (p && p.catch) p.catch(function(){});
+                        } catch (err) { throttledSaveData(); }
+                        showNotification('本地字体已应用: ' + file.name, 'success');
+                    } catch (err) {
+                        console.error('本地字体加载失败:', err);
+                        showNotification('字体加载失败，请检查文件是否有效', 'error');
+                    }
+
+                    localFontInput.value = '';
+                });
+            }
+
+            // 启动时恢复上次的本地字体（如果有）
+            window._restoreLocalFontIfNeeded = async function() {
+                try {
+                    const saved = await localforage.getItem(getStorageKey('localFontFile'));
+                    if (saved && saved.data && settings.customFontUrl === '__local__') {
+                        const binaryStr = atob(saved.data);
+                        const bytes = new Uint8Array(binaryStr.length);
+                        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+                        const blob = new Blob([bytes], { type: saved.mime || 'font/ttf' });
+                        const blobUrl = URL.createObjectURL(blob);
+                        await applyCustomFont(blobUrl);
+                        if (localFontName) {
+                            localFontName.textContent = '✅ 已加载: ' + saved.name;
+                        }
+                    }
+                } catch(e) { console.error('[本地字体] 恢复失败:', e); }
+            };
+
             const cssTextarea = document.getElementById('custom-bubble-css');
             const applyCssBtn = document.getElementById('apply-css-btn');
             const resetCssBtn = document.getElementById('reset-css-btn');
@@ -1442,20 +1530,18 @@ if (_chatSettingsEl) _chatSettingsEl.addEventListener('click', () => {
 
             const bgInput = document.getElementById('bg-gallery-input');
             if (bgInput) {
-                bgInput.addEventListener('change', (e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    if (file.size > 10 * 1024 * 1024) {
-                        showNotification('背景图片不能超过10MB', 'error');
-                        return;
-                    }
-                    if (file.size > 5 * 1024 * 1024) {
-                        showNotification('文件较大，正在处理中...', 'info', 2000);
-                    }
-                    const reader = new FileReader();
-                    reader.onload = async (event) => {
-                        const base64 = event.target.result;
-                        const bgType = file.type === 'image/gif' ? 'gif' : 'image';
+            bgInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (file.size > 5 * 1024 * 1024) {
+                    showNotification('文件较大，正在处理中...', 'info', 2000);
+                }
+
+                const processBgFile = (srcFile) => {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const base64 = event.target.result;
+                    const bgType = srcFile.type === 'image/gif' ? 'gif' : 'image';
                         const bgId = `user-${Date.now()}`;
 
                         // 本地永远存全尺寸 base64（保证离线/刷新后立刻显示）
@@ -1497,8 +1583,23 @@ if (_chatSettingsEl) _chatSettingsEl.addEventListener('click', () => {
                         localforage.setItem(getStorageKey('chatBackground'), base64);
                         showNotification('新背景已添加并应用', 'success');
                     };
-                    reader.readAsDataURL(file);
+                    reader.readAsDataURL(srcFile);
                     e.target.value = '';
+                    };
+
+                    if (file.size > 10 * 1024 * 1024) {
+                        if (file.type === 'image/gif') {
+                            showNotification('背景GIF不能超过10MB', 'error');
+                            e.target.value = '';
+                            return;
+                        }
+                        showNotification('背景图片超过10MB，正在自动压缩...', 'info', 2000);
+                        compressImageUnderMaxBytes(file, 10 * 1024 * 1024, { maxWidth: 2400, quality: 0.85 })
+                            .then(processBgFile)
+                            .catch(() => processBgFile(file));
+                    } else {
+                        processBgFile(file);
+                    }
                 });
             }
 

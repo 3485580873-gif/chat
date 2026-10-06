@@ -66,6 +66,63 @@ function deduplicateContentArray(arr, baseSystemArray = []) {
             });
         }
 
+        // 自动压缩图片，使其 base64 体积不超过 maxBytes（用于头像/背景图上传超限时）
+        function compressImageUnderMaxBytes(file, maxBytes, opts) {
+            opts = opts || {};
+            const maxWidth = opts.maxWidth || 1920;
+            const startQuality = opts.quality || 0.85;
+            const minQuality = 0.35;
+            return new Promise((resolve, reject) => {
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = function () {
+                    let scale = 1;
+                    const longest = Math.max(img.width, img.height);
+                    if (longest > maxWidth) scale = maxWidth / longest;
+                    let w = Math.max(1, Math.round(img.width * scale));
+                    let h = Math.max(1, Math.round(img.height * scale));
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    function render(q) {
+                        canvas.width = w; canvas.height = h;
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, w, h);
+                        ctx.drawImage(img, 0, 0, w, h);
+                        return canvas.toDataURL('image/jpeg', q);
+                    }
+                    let quality = startQuality;
+                    let out = render(quality);
+                    while (out.length * 0.75 > maxBytes && quality > minQuality) {
+                        quality = Math.max(minQuality, +(quality - 0.1).toFixed(2));
+                        out = render(quality);
+                    }
+                    while (out.length * 0.75 > maxBytes && w > 200) {
+                        w = Math.round(w * 0.8);
+                        h = Math.round(h * 0.8);
+                        out = render(minQuality);
+                    }
+                    URL.revokeObjectURL(url);
+                    try {
+                        const arr = out.split(',');
+                        const mimeMatch = arr[0].match(/:(.*?);/);
+                        const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+                        const bstr = atob(arr[1]);
+                        const u8 = new Uint8Array(bstr.length);
+                        for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+                        resolve(new File([u8], (file.name || 'image.jpg'), { type: mime }));
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                img.onerror = function () {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('图片加载失败'));
+                };
+                img.src = url;
+            });
+        }
+        if (typeof window !== 'undefined') window.compressImageUnderMaxBytes = compressImageUnderMaxBytes;
+
         function exportDataToMobileOrPC(dataString, fileName) {
             if (navigator.share && navigator.canShare) {
                 try {
@@ -356,6 +413,16 @@ async function applyCustomFont(url) {
         console.error('字体加载失败:', e);
         showNotification('字体加载失败，请检查链接是否有效', 'error');
     }
+}
+
+function arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 8192;
+    for (let i = 0; /* eslint-disable-line */ i < bytes.byteLength; i += chunkSize) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
 }
 
 function applyCustomBubbleCss(cssCode) {
